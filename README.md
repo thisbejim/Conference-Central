@@ -17,6 +17,9 @@ This query returns all sessions on a user's wishlist of a certain type. This wou
 ## query problem
 The problem with trying to query for sessions that are both before 7pm and are not workshops is that the app engine does not allow for two inequality filters to be applied to two seperate properties in one query. In getConferenceSessionsProblem, at first I queried only for sessions before 7pm and then tried to delete results that weren't workshops, but the Query object doesn't allow for deletion. Ultimately I iterated over the time query results and used - 'workshop' not in - to find the results I actually wanted and pass them to a new array.  
 
+## Test
+You can test this API [here](https://apis-explorer.appspot.com/apis-explorer/?base=https://stone-index-91501.appspot.com/_ah/api#p/conference/v1/)
+
 ## Setup
 Download the [App Engine SDK](https://cloud.google.com/appengine/downloads)
 
