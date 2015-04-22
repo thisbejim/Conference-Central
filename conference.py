@@ -72,11 +72,11 @@ DEFAULTS = {
     "city": "Default City",
     "maxAttendees": 0,
     "seatsAvailable": 0,
-    "topics": [ "Default", "Topic" ],
+    "topics": ["Web Development", "Education"],
 }
 
 S_DEFAULTS = {
-    "typeOfSession": [ "Default", "Topic" ],
+    "typeOfSession": ["Workshop", "Lecture"],
 }
 
 OPERATORS = {
@@ -377,7 +377,7 @@ class ConferenceApi(remote.Service):
             raise endpoints.ForbiddenException('Only the owner can update the conference.')
 
         if not request.name:
-            raise endpoints.BadRequestException("Conference 'name' field required")
+            raise endpoints.BadRequestException("Session 'name' field required")
 
 
         # add default values for those missing (both data model & outbound Message)
@@ -388,7 +388,7 @@ class ConferenceApi(remote.Service):
 
         # add date and time
         if data['startTime']:
-            data['startTime'] = datetime.strptime(data['startTime'], "%H:%M:%S").time()
+            data['startTime'] = datetime.strptime(data['startTime'], "%H:%M").time()
         if data['date']:
             data['date'] = datetime.strptime(data['date'][:10], "%Y-%m-%d").date()
 
@@ -404,20 +404,19 @@ class ConferenceApi(remote.Service):
         # if speaker has more than 1 session, add to featured speaker memcache
         q = Session.query().filter(Session.speaker == data['speaker']).count()
         if q > 1:
-            featured = ANNOUNCEMENT_FT+data['speaker']
-            memcache.set(MEMCACHE_FEATURED_KEY, featured)
+            taskqueue.add(params={'speaker': data['speaker']}, url='/tasks/set_featured_speaker')
 
         Session(**data).put()
         return request
 
-    @endpoints.method(SessionForm, SessionForm, path='session',
+    @endpoints.method(SessionForm, SessionForm, path='/sessions/create',
             http_method='POST', name='createSession')
     def createSession(self, request):
         """Create new session."""
         return self._createSessionObject(request)
 
-    @endpoints.method(SessionQuerySpeaker, SessionForms, path='querySpeaker',
-            http_method='POST', name='getSessionBySpeaker')
+    @endpoints.method(SessionQuerySpeaker, SessionForms, path='/sessions?speaker=',
+            http_method='GET', name='getSessionBySpeaker')
     def getSessionBySpeaker(self, request):
         """Get session by speaker."""
 
@@ -427,8 +426,8 @@ class ConferenceApi(remote.Service):
 
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
-    @endpoints.method(SessionQueryType, SessionForms, path='queryType',
-            http_method='POST', name='getConferenceSessionsByType')
+    @endpoints.method(SessionQueryType, SessionForms, path='/sessions?type=',
+            http_method='GET', name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
         """Get session by typeOfSession."""
 
@@ -439,8 +438,8 @@ class ConferenceApi(remote.Service):
 
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
-    @endpoints.method(SessionQuery, SessionForms, path='sessionQuery',
-            http_method='POST', name='getConferenceSessions')
+    @endpoints.method(SessionQuery, SessionForms, path='/sessions?conference=',
+            http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """Get sessions by conference."""
 
@@ -450,8 +449,8 @@ class ConferenceApi(remote.Service):
         q = Session.query(ancestor=conf.key).fetch()
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
-    @endpoints.method(SessionQuery, SessionForms, path='sessionProblemQuery',
-            http_method='POST', name='getConferenceSessionsProblem')
+    @endpoints.method(SessionQuery, SessionForms, path='/sessions?problem=',
+            http_method='GET', name='getConferenceSessionsProblem')
     def getConferenceSessionsProblem(self, request):
         """Query by time and type."""
         if not request.websafeConferenceKey:
@@ -469,13 +468,6 @@ class ConferenceApi(remote.Service):
 
         return SessionForms(items=[self._copySessionToForm(sess) for sess in a])
 
-
-    @endpoints.method(message_types.VoidMessage, StringMessage,
-            path='getFeaturedSpeaker',
-            http_method='GET', name='getFeaturedSpeaker')
-    def getFeaturedSpeaker(self, request):
-        """get Featured Speaker."""
-        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_KEY) or "")
 
 # - - - Wishlist - - - - - - - - - - - - - - - - - - - -
 
@@ -501,14 +493,6 @@ class ConferenceApi(remote.Service):
         # get userId
         user_id = getUserId(user)
 
-        # query wishlist, filter by userId and sessionName, then count
-        q = Wishlist.query()
-        q = q.filter(Wishlist.userId == user_id)
-        q = q.filter(Wishlist.sessionName == request.sessionName).count()
-        # if this session already in user's wishlist, bounce
-        if q:
-            raise endpoints.UnauthorizedException('Session already added to wishlist')
-
         # get session key
         this_session = Session.query(Session.name == request.sessionName).get()
 
@@ -522,6 +506,15 @@ class ConferenceApi(remote.Service):
         c_key = ndb.Key(Wishlist, c_id, parent=p_key)
         data['key'] = c_key
 
+        # query wishlist, filter by userId and sessionName, then count
+        q = Wishlist.query()
+        q = q.filter(Wishlist.userId == user_id)
+
+        # if this session already in user's wishlist, bounce
+        for i in q:
+            if i.sessionKey == this_session.key:
+                raise endpoints.UnauthorizedException('Session already added to wishlist')
+
         # save to wishlist
         Wishlist(**data).put()
         return request
@@ -529,13 +522,13 @@ class ConferenceApi(remote.Service):
     @endpoints.method(WishlistForm, WishlistForm, path='wishlist',
             http_method='POST', name='addSessionToWishlist')
     def addSessionToWishlist(self, request):
-        """Create new wishlist."""
+        """Add session to wishlist."""
         return self._createWishlistObject(request)
 
-    @endpoints.method(WishlistQuery, WishlistForms, path='wishlistQuery',
-            http_method='POST', name='getSessionsInWishlist')
+    @endpoints.method(message_types.VoidMessage, WishlistForms, path='/wishlist?sessions=',
+            http_method='GET', name='getSessionsInWishlist')
     def getSessionsInWishlist(self, request):
-        """Get session by speaker."""
+        """Get sessions in wishlist."""
 
         # check auth
         user = endpoints.get_current_user()
@@ -544,13 +537,12 @@ class ConferenceApi(remote.Service):
         # get userId
         user_id = getUserId(user)
         # query wishlist, filter by userId
-        q = Wishlist.query()
-        q = q.filter(Wishlist.userId == user_id)
+        q = Wishlist.query().filter(Wishlist.userId == user_id)
 
         return WishlistForms(items=[self._copyWishlistToForm(wish) for wish in q])
 
-    @endpoints.method(WishlistSpeakerQuery, WishlistForms, path='wishlistSpeakerQuery',
-            http_method='POST', name='getWishlistBySpeaker')
+    @endpoints.method(WishlistSpeakerQuery, WishlistForms, path='/wishlist?speaker=',
+            http_method='GET', name='getWishlistBySpeaker')
     def getWishlistBySpeaker(self, request):
         """Get wishlist by speaker."""
 
@@ -560,15 +552,21 @@ class ConferenceApi(remote.Service):
             raise endpoints.UnauthorizedException('Authorization required')
         # get userId
         user_id = getUserId(user)
-        # get profile key
-        q = Profile.query(Profile.displayName == request.speaker).get()
-        # query wishlist by ancestor, filter by userId
-        w = Wishlist.query(ancestor=q.key).filter(Wishlist.userId == user_id)
+        # query session, filter by speaker
+        q = Session.query().filter(Session.speaker == request.speaker)
+        # query wishlist, filter by userId
+        p = Wishlist.query().filter(Wishlist.userId == user_id)
 
-        return WishlistForms(items=[self._copyWishlistToForm(wish) for wish in w])
+        a = []
+        for s in q:
+            for w in p:
+                if s.key == w.sessionKey:
+                    a.append(w)
 
-    @endpoints.method(WishlistTypeQuery, WishlistForms, path='wishlistTypeQuery',
-            http_method='POST', name='getWishlistByType')
+        return WishlistForms(items=[self._copyWishlistToForm(wish) for wish in a])
+
+    @endpoints.method(WishlistTypeQuery, WishlistForms, path='/wishlist?type=',
+            http_method='GET', name='getWishlistByType')
     def getWishlistByType(self, request):
         """Get wishlist by type."""
 
@@ -700,6 +698,24 @@ class ConferenceApi(remote.Service):
             announcement = ANNOUNCEMENT_TPL+str(time.ctime())
             memcache.set(MEMCACHE_ANNOUNCEMENTS_KEY, announcement)
         return StringMessage(data=memcache.get(MEMCACHE_ANNOUNCEMENTS_KEY) or "")
+
+    @staticmethod
+    def _cacheFeaturedSpeaker(speaker):
+        """Create Featured Speaker & assign to memcache; used by
+        memcache cron job.
+        """
+        featured = ANNOUNCEMENT_FT + speaker
+        memcache.set(MEMCACHE_FEATURED_KEY, featured)
+
+        return featured
+
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+            path='/sessions?featured-speaker=',
+            http_method='GET', name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """get Featured Speaker."""
+        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_KEY) or "")
 
 
 
