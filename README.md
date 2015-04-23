@@ -35,3 +35,5 @@ http://localhost:[PORT]/_ah/api/explorer - application API explorer
 
 http://localhost:[ADMIN PORT] - application admin
 
+When testing please make sure your Admin Port is 8000 and your Port is 8080 on the App Launcher.
+

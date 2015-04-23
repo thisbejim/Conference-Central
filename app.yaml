@@ -33,10 +33,10 @@ handlers:       # static then dynamic
 - url: /tasks/send_confirmation_email
   script: main.app
 
-- url: /crons/set_announcement
+- url: /tasks/set_featured_speaker
   script: main.app
 
-- url: /tasks/set_featured_speaker
+- url: /crons/set_announcement
   script: main.app
 
 - url: /_ah/spi/.*
@@ -45,6 +45,7 @@ handlers:       # static then dynamic
 
 - url: /_ah/stats/.*
   script: google.appengine.ext.appstats.ui.app
+
 
 libraries:
 
