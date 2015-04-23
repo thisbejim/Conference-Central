@@ -373,9 +373,6 @@ class ConferenceApi(remote.Service):
         user_id = getUserId(user)
         conf = ndb.Key(urlsafe=data['confwebsafeKey']).get()
 
-        if user_id != conf.organizerUserId:
-            raise endpoints.ForbiddenException('Only the owner can update the conference.')
-
         if not request.name:
             raise endpoints.BadRequestException("Session 'name' field required")
 
