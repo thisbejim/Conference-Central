@@ -416,7 +416,7 @@ class ConferenceApi(remote.Service):
         return self._createSessionObject(request)
 
     @endpoints.method(SessionQuerySpeaker, SessionForms, path='querySpeaker',
-            http_method='POST', name='getSessionBySpeaker')
+            http_method='GET', name='getSessionBySpeaker')
     def getSessionBySpeaker(self, request):
         """Get session by speaker."""
 
@@ -427,10 +427,13 @@ class ConferenceApi(remote.Service):
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
     @endpoints.method(SessionQueryType, SessionForms, path='queryType',
-            http_method='POST', name='getConferenceSessionsByType')
+            http_method='GET', name='getConferenceSessionsByType')
     def getConferenceSessionsByType(self, request):
         """Get session by typeOfSession."""
-
+        if not request.websafeConferenceKey:
+            raise endpoints.ForbiddenException('Requires websafeConferenceKey.')
+        if not request.typeOfSession:
+            raise endpoints.ForbiddenException('Requires typeOfSession.')
         # get parent key
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
         # query session by ancestor, filter by typeOfSession
@@ -439,10 +442,11 @@ class ConferenceApi(remote.Service):
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
     @endpoints.method(SessionQuery, SessionForms, path='sessionQuery',
-            http_method='POST', name='getConferenceSessions')
+            http_method='GET', name='getConferenceSessions')
     def getConferenceSessions(self, request):
         """Get sessions by conference."""
-
+        if not request.websafeConferenceKey:
+            raise endpoints.ForbiddenException('Requires websafeConferenceKey.')
         # get parent key
         conf = ndb.Key(urlsafe=request.websafeConferenceKey).get()
         # query session by ancestor
@@ -450,7 +454,7 @@ class ConferenceApi(remote.Service):
         return SessionForms(items=[self._copySessionToForm(sess) for sess in q])
 
     @endpoints.method(SessionQuery, SessionForms, path='sessionProblemQuery',
-            http_method='POST', name='getConferenceSessionsProblem')
+            http_method='GET', name='getConferenceSessionsProblem')
     def getConferenceSessionsProblem(self, request):
         """Query conference sessions by time and type."""
         if not request.websafeConferenceKey:
@@ -526,7 +530,7 @@ class ConferenceApi(remote.Service):
         return self._createWishlistObject(request)
 
     @endpoints.method(message_types.VoidMessage, WishlistForms, path='wishlistQuery',
-            http_method='POST', name='getSessionsInWishlist')
+            http_method='GET', name='getSessionsInWishlist')
     def getSessionsInWishlist(self, request):
         """Get sessions in wishlist."""
 
@@ -542,7 +546,7 @@ class ConferenceApi(remote.Service):
         return WishlistForms(items=[self._copyWishlistToForm(wish) for wish in q])
 
     @endpoints.method(WishlistSpeakerQuery, WishlistForms, path='wishlistSpeakerQuery',
-            http_method='POST', name='getWishlistBySpeaker')
+            http_method='GET', name='getWishlistBySpeaker')
     def getWishlistBySpeaker(self, request):
         """Get wishlist by speaker."""
 
@@ -566,7 +570,7 @@ class ConferenceApi(remote.Service):
         return WishlistForms(items=[self._copyWishlistToForm(wish) for wish in a])
 
     @endpoints.method(WishlistTypeQuery, WishlistForms, path='wishlistTypeQuery',
-            http_method='POST', name='getWishlistByType')
+            http_method='GET', name='getWishlistByType')
     def getWishlistByType(self, request):
         """Get wishlist by type."""
 
